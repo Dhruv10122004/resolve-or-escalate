@@ -1,16 +1,18 @@
 """
-Implements two comparative baseline systems required by the assignment:
+baselines.py
+------------
+Implements two comparative baseline systems using Groq:
 1. TrivialBaseline: Majority intent + static canned FAQ template (Zero AI).
 2. SimpleLLMBaseline: Zero-shot LLM without RAG knowledge base retrieval.
 """
 
 import json
 import os
+import time
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from groq import Groq
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class TrivialBaseline:
@@ -33,17 +35,16 @@ class TrivialBaseline:
 class SimpleLLMBaseline:
     """A naive zero-shot LLM baseline that answers without any RAG grounding context."""
 
-    def __init__(self, model_name="gemini-3.6-flash"):
-        api_key = os.getenv("GEMINI_API_KEY")
+    def __init__(self, model_name="qwen/qwen3.8-27b"):
+        api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise ValueError(
-                "GEMINI_API_KEY is missing! Please set it in your .env file."
+                "GROQ_API_KEY is missing! Please set it in your .env file."
             )
-        self.client = genai.Client(api_key=api_key)
+        self.client = Groq(api_key=api_key)
         self.model_name = model_name
 
-        self.system_instruction = """
-You are a customer support agent for Spotify (@SpotifyCares).
+        self.system_instruction = """You are a customer support agent for Spotify (@SpotifyCares).
 Classify the incoming customer tweet, draft a reply, and decide whether to escalate.
 
 ### INTENTS:
@@ -69,21 +70,28 @@ Return ONLY a valid JSON object:
     ) -> dict:
         prompt = f"Customer Tweet: \"{customer_text}\"\nProvide your JSON classification and reply:"
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=self.system_instruction,
-                    response_mime_type="application/json",
+        for attempt in range(3):
+            try:
+                chat_completion = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "system", "content": self.system_instruction},
+                        {"role": "user", "content": prompt},
+                    ],
                     temperature=0.2,
-                ),
-            )
-            return json.loads(response.text)
-        except Exception:
-            return {
-                "intent": "GENERAL_AND_AMBIGUOUS",
-                "draft_reply": "Hi! How can we assist you with Spotify today?",
-                "escalation_decision": "AUTO_HANDLE",
-                "escalation_reason": "Fallback response.",
-            }
+                    response_format={"type": "json_object"},
+                )
+                return json.loads(chat_completion.choices[0].message.content)
+            except Exception as e:
+                err_str = str(e)
+                if attempt < 2 and (
+                    "429" in err_str or "rate limit" in err_str.lower()
+                ):
+                    time.sleep(3)
+                else:
+                    return {
+                        "intent": "GENERAL_AND_AMBIGUOUS",
+                        "draft_reply": "Hi! How can we assist you with Spotify today?",
+                        "escalation_decision": "AUTO_HANDLE",
+                        "escalation_reason": "Fallback response.",
+                    }
