@@ -8,6 +8,11 @@ env/
 twcs.csv
 *.csv.zip
 *.tar.gz
+data/eval_checkpoint.json
+data/evaluation_results.json
+data/kb_embeddings.npy
+data/golden_candidates.json
+data/clean_spotify_kb.csv
 
 # Python cache & build artifacts
 __pycache__/

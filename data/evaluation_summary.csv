@@ -1,0 +1,4 @@
+System,Intent Accuracy,Escalation F1,Groundedness (1-5),Reply Quality (1-5)
+Baseline 1 (Trivial Canned),37.0%,0.000,1.60,2.34
+Baseline 2 (Zero-shot LLM),75.0%,0.567,3.45,3.64
+Proposed System (RAG Agent),71.7%,0.583,3.18,3.43
